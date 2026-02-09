@@ -3,115 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的簡易版 YouTube (CORS 修復版)</title>
+    <title>YouTube 本地播放器 (Web修復版)</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #f0f0f0; }
-        .control-panel { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .search-box { display: flex; gap: 10px; margin-top: 10px; }
-        input { padding: 10px; flex-grow: 1; }
-        button { padding: 10px 20px; cursor: pointer; background: #ff0000; color: white; border: none; border-radius: 4px; }
-        button:hover { background: #cc0000; }
-        select { padding: 10px; border-radius: 4px; border: 1px solid #ccc; width: 100%; }
-        #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
-        .video-card { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.2s; }
-        .video-card:hover { transform: translateY(-5px); }
-        .video-card img { width: 100%; border-radius: 4px; aspect-ratio: 16/9; object-fit: cover; }
-        .video-card h3 { font-size: 14px; margin: 10px 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        /* 基礎設定 */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; background: #f9f9f9; color: #333; }
         
-        /* 播放器樣式 */
-        .player-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; justify-content: center; align-items: center; z-index: 1000; }
-        .player-content { width: 90%; max-width: 800px; background: #000; position: relative; }
-        video { width: 100%; display: block; }
-        .close-btn { position: absolute; top: -40px; right: 0; color: white; font-size: 24px; cursor: pointer; background: none; border: none; }
-        .status-msg { color: #666; font-size: 0.9em; margin-top: 5px; }
+        /* 控制面板區 */
+        .control-panel { background: #fff; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .control-panel h3 { margin-top: 0; color: #444; }
+        
+        /* 搜尋與選單 */
+        .input-group { margin-bottom: 15px; }
+        select, input { padding: 12px; border-radius: 6px; border: 1px solid #ddd; width: 100%; box-sizing: border-box; font-size: 16px; margin-top: 5px; }
+        button { padding: 12px 24px; cursor: pointer; background: #ff0033; color: white; border: none; border-radius: 6px; font-size: 16px; transition: background 0.2s; width: 100%; }
+        button:hover { background: #cc0022; }
+        
+        /* 狀態訊息 */
+        .status-msg { color: #666; font-size: 0.9em; margin-top: 10px; min-height: 1.2em; }
+        
+        /* 影片列表網格 */
+        #results { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        
+        /* 影片卡片 */
+        .video-card { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .video-card:hover { transform: translateY(-4px); box-shadow: 0 8px 12px rgba(0,0,0,0.1); }
+        .thumbnail-container { position: relative; width: 100%; aspect-ratio: 16/9; background: #eee; }
+        .thumbnail-container img { width: 100%; height: 100%; object-fit: cover; }
+        .video-info { padding: 12px; }
+        .video-title { font-weight: bold; margin: 0 0 8px 0; font-size: 15px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .uploader-name { font-size: 13px; color: #666; }
+
+        /* 播放器彈窗 (Overlay) */
+        .player-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(5px); }
+        .player-content { width: 90%; max-width: 900px; background: #000; border-radius: 8px; overflow: hidden; box-shadow: 0 0 20px rgba(0,0,0,0.5); position: relative; }
+        video { width: 100%; aspect-ratio: 16/9; display: block; outline: none; }
+        .close-btn { position: absolute; top: 10px; right: 10px; background: rgba(255, 255, 255, 0.2); color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-weight: bold; line-height: 30px; text-align: center; padding: 0; }
+        .close-btn:hover { background: rgba(255, 0, 0, 0.8); }
+
+        /* RWD 適配 */
+        @media (min-width: 600px) {
+            .search-box-row { display: flex; gap: 10px; }
+            button { width: auto; }
+        }
     </style>
 </head>
 <body>
 
     <div class="control-panel">
-        <h3>1. 選擇伺服器 (如果報錯就換一個)</h3>
-        <select id="apiSelect">
-            <option value="https://pipedapi.kavin.rocks">官方 (kavin.rocks) - 可能不穩定</option>
-            <option value="https://api.piped.privacy.com.de">德國 (privacy.com.de) - 推薦</option>
-            <option value="https://piped-api.lunar.icu">Lunar (lunar.icu)</option>
-            <option value="https://pipedapi.tokhmi.xyz">Tokhmi (tokhmi.xyz)</option>
-            <option value="https://api-piped.mha.fi">芬蘭 (mha.fi)</option>
-        </select>
-        
-        <h3>2. 搜尋影片</h3>
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="輸入關鍵字 (例如: 台灣新聞)">
-            <button onclick="searchVideo()">搜尋</button>
+        <div class="input-group">
+            <label for="apiSelect"><strong>步驟 1：選擇伺服器</strong> (如果報錯，請換一個)</label>
+            <select id="apiSelect">
+                <option value="https://pipedapi.drgns.space">Drgns Space (推薦)</option>
+                <option value="https://api.piped.projectsegfau.lt">Project Segfault (穩定)</option>
+                <option value="https://pipedapi.tokhmi.xyz">Tokhmi</option>
+                <option value="https://pipedapi.smnz.de">SMNZ</option>
+                <option value="https://pipedapi.kavin.rocks">官方 (Kavin) - 易被擋</option>
+            </select>
         </div>
-        <div id="statusMsg" class="status-msg"></div>
+        
+        <div class="input-group">
+            <label for="searchInput"><strong>步驟 2：搜尋</strong></label>
+            <div class="search-box-row">
+                <input type="text" id="searchInput" placeholder="輸入關鍵字 (例如: 貓咪, 音樂)">
+                <button onclick="searchVideo()">搜尋影片</button>
+            </div>
+        </div>
+        <div id="statusMsg" class="status-msg">準備就緒</div>
     </div>
 
     <div id="results"></div>
 
-    <div id="playerOverlay" class="player-overlay">
+    <div id="playerOverlay" class="player-overlay" onclick="handleOverlayClick(event)">
         <div class="player-content">
-            <button class="close-btn" onclick="closePlayer()">✕ 關閉</button>
-            <video id="videoPlayer" controls></video>
+            <button class="close-btn" onclick="closePlayer()">×</button>
+            <video id="videoPlayer" controls playsinline></video>
         </div>
     </div>
 
     <script>
-        // 取得使用者選擇的 API 網址
+        // 取得使用者選擇的 API
         function getApiBase() {
             return document.getElementById('apiSelect').value;
         }
 
-        function showStatus(msg) {
-            document.getElementById('statusMsg').textContent = msg;
+        // 顯示狀態訊息
+        function showStatus(msg, isError = false) {
+            const el = document.getElementById('statusMsg');
+            el.textContent = msg;
+            el.style.color = isError ? '#d32f2f' : '#2e7d32';
         }
 
+        // 執行搜尋
         async function searchVideo() {
-            const query = document.getElementById('searchInput').value;
+            const query = document.getElementById('searchInput').value.trim();
             const resultsDiv = document.getElementById('results');
             const apiBase = getApiBase();
 
-            if (!query) return;
+            if (!query) {
+                showStatus('請先輸入關鍵字', true);
+                return;
+            }
 
             resultsDiv.innerHTML = '';
-            showStatus(`正在連線到 ${apiBase} 搜尋中...`);
+            showStatus(`正在透過 ${apiBase} 搜尋...`);
             
             try {
                 // 發送請求
-                const response = await fetch(`${apiBase}/search?q=${encodeURIComponent(query)}&filter=all`);
+                const response = await fetch(`${apiBase}/search?q=${encodeURIComponent(query)}&filter=videos`);
                 
                 if (!response.ok) {
-                    throw new Error(`伺服器回應錯誤: ${response.status}`);
+                    throw new Error(`伺服器拒絕連線 (代碼: ${response.status})`);
                 }
 
                 const data = await response.json();
-                showStatus(`搜尋完成，找到 ${data.items.length} 筆結果。`);
+                
+                if (!data.items || data.items.length === 0) {
+                    showStatus('找不到相關影片', true);
+                    return;
+                }
 
+                showStatus(`搜尋成功！找到 ${data.items.length} 部影片。`);
+
+                // 渲染結果
                 data.items.forEach(item => {
-                    if (item.type === 'stream') {
-                        const card = document.createElement('div');
-                        card.className = 'video-card';
-                        card.onclick = () => playVideo(item.url); // 點擊卡片播放
-                        card.innerHTML = `
-                            <img src="${item.thumbnail}" alt="${item.title}" loading="lazy">
-                            <h3>${item.title}</h3>
-                        `;
-                        resultsDiv.appendChild(card);
-                    }
+                    // 建立卡片
+                    const card = document.createElement('div');
+                    card.className = 'video-card';
+                    card.onclick = () => playVideo(item.url); // 點擊播放
+                    
+                    // 處理縮圖 (如果 Piped 縮圖讀取失敗，使用預設圖)
+                    let thumbUrl = item.thumbnail;
+                    
+                    card.innerHTML = `
+                        <div class="thumbnail-container">
+                            <img src="${thumbUrl}" alt="影片縮圖" onerror="this.src='https://via.placeholder.com/320x180?text=No+Image'">
+                        </div>
+                        <div class="video-info">
+                            <div class="video-title">${item.title}</div>
+                            <div class="uploader-name">${item.uploaderName || '未知作者'}</div>
+                        </div>
+                    `;
+                    resultsDiv.appendChild(card);
                 });
 
             } catch (error) {
                 console.error(error);
-                showStatus(`錯誤: ${error.message}。請嘗試切換上方的伺服器選單再試一次。`);
+                showStatus(`錯誤: ${error.message}。請嘗試切換上方的伺服器選項！`, true);
             }
         }
 
+        // 執行播放
         async function playVideo(videoUrl) {
-            const videoId = videoUrl.split('v=')[1];
+            if (!videoUrl) return;
+            
+            // 從網址中提取 ID (/watch?v=ID)
+            let videoId = videoUrl.split('v=')[1];
+            if (!videoId) return;
+
             const apiBase = getApiBase();
             const playerOverlay = document.getElementById('playerOverlay');
             const videoPlayer = document.getElementById('videoPlayer');
 
-            showStatus('正在解析影片網址...');
+            showStatus('正在解析影片串流，請稍候...');
 
             try {
                 const response = await fetch(`${apiBase}/streams/${videoId}`);
@@ -119,32 +172,49 @@
                 
                 const data = await response.json();
                 
-                // 尋找 1080p 的 mp4，如果沒有就找第一個有聲音的 mp4
-                const stream = data.videoStreams.find(s => s.quality === '1080p' && s.mimeType.includes('mp4')) 
+                // 邏輯：優先找 1080p mp4，其次找任意有聲 mp4
+                const stream = data.videoStreams.find(s => s.quality === '1080p' && s.mimeType.includes('mp4') && !s.videoOnly) 
                             || data.videoStreams.find(s => s.mimeType.includes('mp4') && !s.videoOnly)
-                            || data.videoStreams[0];
+                            || data.videoStreams[0]; // 最後手段
 
                 if (stream) {
                     videoPlayer.src = stream.url;
                     playerOverlay.style.display = 'flex';
-                    videoPlayer.play();
-                    showStatus('開始播放');
+                    
+                    // 嘗試自動播放
+                    try {
+                        await videoPlayer.play();
+                    } catch (e) {
+                        console.log("瀏覽器阻止自動播放，需手動點擊");
+                    }
+                    
+                    showStatus(`正在播放: ${data.title}`);
                 } else {
-                    alert('找不到可播放的格式');
+                    alert('抱歉，此伺服器找不到這部影片的可播放格式。');
                 }
 
             } catch (error) {
                 console.error(error);
-                alert(`播放失敗: ${error.message}，請換個伺服器試試`);
+                alert(`播放失敗: ${error.message}\n建議換一個伺服器再試。`);
+                showStatus('播放發生錯誤', true);
             }
         }
 
+        // 關閉播放器
         function closePlayer() {
             const playerOverlay = document.getElementById('playerOverlay');
             const videoPlayer = document.getElementById('videoPlayer');
             videoPlayer.pause();
-            videoPlayer.src = "";
+            videoPlayer.src = ""; // 釋放資源
+            videoPlayer.load();
             playerOverlay.style.display = 'none';
+        }
+
+        // 點擊背景關閉播放器
+        function handleOverlayClick(event) {
+            if (event.target.id === 'playerOverlay') {
+                closePlayer();
+            }
         }
     </script>
 </body>
