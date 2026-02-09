@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NewPipe V21 (滑動操控版)</title>
+    <title>NewPipe V21 (穩定修復版)</title>
     <style>
-        body { font-family: "Segoe UI", sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 20px; display: flex; gap: 20px; height: 100vh; box-sizing: border-box; user-select: none; /* 防止拖動時選取文字 */ }
+        body { font-family: "Segoe UI", sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 20px; display: flex; gap: 20px; height: 100vh; box-sizing: border-box; user-select: none; }
         .main-stage { flex: 2; display: flex; flex-direction: column; gap: 15px; }
         .box { background: #1e1e1e; padding: 20px; border-radius: 12px; border: 1px solid #333; }
         
@@ -24,11 +24,9 @@
 
         #log { font-family: monospace; color: #aaa; font-size: 12px; margin-top: 10px; height: 80px; overflow-y: auto; background: #000; padding: 8px; border-radius: 4px; }
         
-        /* === 播放器容器 === */
         .media-container { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 8px; overflow: hidden; }
         #mainPlayer { width: 100%; height: 100%; object-fit: contain; }
         
-        /* === 音樂模式遮罩層 === */
         #audioOverlay { 
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             background: linear-gradient(135deg, #1a1a1a 0%, #000 100%); 
@@ -49,13 +47,11 @@
         .song-title { font-size: 18px; font-weight: bold; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .song-artist { font-size: 14px; color: #888; }
 
-        /* 控制區塊 (進度條 + 音量) */
         .audio-controls { width: 85%; display: flex; flex-direction: column; gap: 20px; }
         
-        /* === 通用滑動條樣式 (進度條 & 音量條) === */
         .slider-container { 
             width: 100%; height: 24px; display: flex; align-items: center; cursor: pointer; position: relative; 
-            touch-action: none; /* 防止手機上下滑動干擾 */
+            touch-action: none; 
         }
         .slider-track { 
             width: 100%; height: 4px; background: #444; border-radius: 2px; position: relative; 
@@ -63,7 +59,6 @@
         .slider-fill { 
             height: 100%; background: #2196f3; width: 0%; border-radius: 2px; position: absolute; top: 0; left: 0; pointer-events: none; 
         }
-        /* 圓球 (Thumb) */
         .slider-thumb {
             width: 14px; height: 14px; background: #fff; border-radius: 50%;
             position: absolute; top: 50%; left: 0%; 
@@ -79,13 +74,11 @@
 
         .time-labels { display: flex; justify-content: space-between; font-size: 12px; color: #ccc; font-family: monospace; margin-top: -8px; }
 
-        /* 音量區塊 */
         .volume-wrapper { display: flex; align-items: center; gap: 12px; width: 100%; }
         .vol-icon { cursor: pointer; font-size: 18px; width: 24px; text-align: center; }
 
         @keyframes spin { 100% { transform: rotate(360deg); } }
 
-        /* 右側清單 */
         .playlist-sidebar { flex: 1; background: #181818; border-radius: 12px; border: 1px solid #333; display: flex; flex-direction: column; overflow: hidden; min-width: 320px; }
         .playlist-header { padding: 15px; background: #252526; border-bottom: 1px solid #333; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
         .playlist-items { flex: 1; overflow-y: auto; }
@@ -103,7 +96,7 @@
 
     <div class="main-stage">
         <div class="box">
-            <h2>🚀 NewPipe V21 (滑動操控版)</h2>
+            <h2>🚀 NewPipe V21 (穩定修復版)</h2>
             
             <label style="font-size:12px; color:#aaa;">播放模式:</label>
             <select id="qualitySelect" onchange="toggleMode()">
@@ -127,7 +120,7 @@
             <video id="mainPlayer" controls playsinline></video>
             
             <div id="audioOverlay">
-                <img id="albumArt" src="https://via.placeholder.com/150" onclick="togglePlayPause()" title="點擊暫停/播放">
+                <img id="albumArt" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMzMzMzMzIi8+PC9zdmc+" onclick="togglePlayPause()" title="點擊暫停/播放">
                 
                 <div class="song-info">
                     <div class="song-title" id="displayTitle">準備播放</div>
@@ -186,8 +179,6 @@
         let uniqueIds = new Set();
         let currentMeta = { thumb: "", title: "", author: "" }; 
         let lastVolume = 1.0; 
-        
-        // 拖曳狀態旗標
         let isDraggingSeek = false;
         let isDraggingVol = false;
 
@@ -200,7 +191,6 @@
 
         const player = document.getElementById('mainPlayer');
         
-        // === 核心功能：滑鼠拖曳邏輯 ===
         function setupDraggable(containerId, onDrag, onStop) {
             const container = document.getElementById(containerId);
             
@@ -219,30 +209,25 @@
             };
 
             container.addEventListener('mousedown', (e) => {
-                handleMove(e); // 點擊當下先更新一次
+                handleMove(e); 
                 document.addEventListener('mousemove', handleMove);
                 document.addEventListener('mouseup', handleUp);
             });
         }
 
-        // 綁定進度條拖曳
         setupDraggable('seekBar', (percent) => {
-            isDraggingSeek = true; // 鎖住自動更新
+            isDraggingSeek = true;
             updateSeekUI(percent * 100);
             if(player.duration) {
-                // 拖曳時即時預覽時間
                 const previewTime = percent * player.duration;
                 document.getElementById('currTimeText').innerText = formatTime(previewTime);
-                // 可選：即時跳轉 (Scrubbing) -> player.currentTime = previewTime;
             }
         }, () => {
-            // 放開滑鼠時才真正跳轉 (避免卡頓)
             const percent = parseFloat(document.getElementById('seekFill').style.width) / 100;
             if(player.duration) player.currentTime = percent * player.duration;
-            isDraggingSeek = false; // 解鎖
+            isDraggingSeek = false;
         });
 
-        // 綁定音量條拖曳
         setupDraggable('volBar', (percent) => {
             isDraggingVol = true;
             updateVolUI(percent);
@@ -252,10 +237,8 @@
             isDraggingVol = false;
         });
 
-
-        // === 播放器事件 ===
         player.addEventListener('timeupdate', () => {
-            if (!player.duration || isDraggingSeek) return; // 如果正在拖，就不要被影片更新打斷
+            if (!player.duration || isDraggingSeek) return; 
             
             const percent = (player.currentTime / player.duration) * 100;
             updateSeekUI(percent);
@@ -275,7 +258,6 @@
             updateVolIcon();
         });
 
-        // UI 更新 Helper
         function updateSeekUI(percent) {
             document.getElementById('seekFill').style.width = percent + '%';
             document.getElementById('seekThumb').style.left = percent + '%';
@@ -321,13 +303,12 @@
             const overlay = document.getElementById('audioOverlay');
             if (mode === 'audio') {
                 overlay.style.display = 'flex';
-                updateVolUI(player.volume); // 切換回來時同步音量條 UI
+                updateVolUI(player.volume); 
             } else {
                 overlay.style.display = 'none';
             }
         }
 
-        // === 自動加載 (保持不變) ===
         async function startAutoLoad() {
             const input = document.getElementById('inputUrl').value;
             let listId = input.includes("list=") ? input.split("list=")[1].split("&")[0] : input;
@@ -399,7 +380,10 @@
                 totalLoaded++;
 
                 const title = v.title.runs ? v.title.runs[0].text : (v.title.simpleText || "無標題");
-                let thumb = "https://via.placeholder.com/100x56";
+                
+                // 修正：這裡也換成最短的灰色方塊
+                let thumb = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjMzMzMzMzIi8+PC9zdmc+";
+                
                 if (v.thumbnail?.thumbnails?.length) {
                     thumb = v.thumbnail.thumbnails[v.thumbnail.thumbnails.length - 1].url;
                 }
@@ -437,7 +421,7 @@
                 document.getElementById('albumArt').src = currentMeta.thumb;
                 document.getElementById('displayTitle').innerText = currentMeta.title;
                 document.getElementById('displayAuthor').innerText = currentMeta.author;
-                updateVolUI(player.volume); // 同步音量
+                updateVolUI(player.volume);
             } else {
                 overlay.style.display = 'none';
             }
