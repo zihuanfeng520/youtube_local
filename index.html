@@ -3,171 +3,490 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NewPipe Web版 (含強力穿透)</title>
+    <title>NewPipe V21 (滑動操控版)</title>
     <style>
-        /* 介面樣式 */
-        body { font-family: sans-serif; padding: 20px; background: #f4f4f4; color: #333; max-width: 1000px; margin: 0 auto; }
+        body { font-family: "Segoe UI", sans-serif; background: #121212; color: #e0e0e0; margin: 0; padding: 20px; display: flex; gap: 20px; height: 100vh; box-sizing: border-box; user-select: none; /* 防止拖動時選取文字 */ }
+        .main-stage { flex: 2; display: flex; flex-direction: column; gap: 15px; }
+        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; border: 1px solid #333; }
         
-        .panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        select, input { width: 100%; padding: 12px; background: #000; color: #fff; border: 1px solid #444; border-radius: 6px; box-sizing: border-box; margin-bottom: 10px; font-size: 16px; }
         
-        .row { margin-bottom: 15px; }
-        label { font-weight: bold; display: block; margin-bottom: 5px; }
+        .controls { display: flex; gap: 10px; }
+        button { flex: 1; padding: 12px; border-radius: 6px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-start { background: #2196f3; color: white; }
+        .btn-start:hover { background: #1976d2; }
+        .btn-stop { background: #f44336; color: white; display: none; }
+        .btn-stop:hover { background: #d32f2f; }
+
+        .progress-bar { height: 4px; background: #333; margin-top: 15px; border-radius: 2px; overflow: hidden; display: none; }
+        .progress-value { height: 100%; background: #2196f3; width: 0%; animation: loading 1s infinite linear; }
+        @keyframes loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+        #log { font-family: monospace; color: #aaa; font-size: 12px; margin-top: 10px; height: 80px; overflow-y: auto; background: #000; padding: 8px; border-radius: 4px; }
         
-        select, input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        /* === 播放器容器 === */
+        .media-container { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 8px; overflow: hidden; }
+        #mainPlayer { width: 100%; height: 100%; object-fit: contain; }
         
-        /* 特別設計的開關 */
-        .proxy-switch { background: #e3f2fd; padding: 10px; border-radius: 6px; border: 1px solid #2196f3; color: #0d47a1; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        .proxy-switch input { transform: scale(1.5); cursor: pointer; }
+        /* === 音樂模式遮罩層 === */
+        #audioOverlay { 
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: linear-gradient(135deg, #1a1a1a 0%, #000 100%); 
+            z-index: 20; flex-direction: column; align-items: center; justify-content: center; 
+            padding-bottom: 20px; box-sizing: border-box;
+        }
 
-        button { width: 100%; padding: 12px; background: #ff0000; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; transition: 0.2s; }
-        button:hover { background: #cc0000; }
+        #albumArt { 
+            width: 140px; height: 140px; border-radius: 50%; object-fit: cover; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 15px; border: 4px solid #333; 
+            cursor: pointer; transition: transform 0.2s;
+            animation: spin 20s linear infinite;
+            animation-play-state: paused; 
+        }
+        #albumArt:active { transform: scale(0.95); }
 
-        #msg { margin-top: 10px; font-size: 14px; min-height: 20px; color: #555; }
+        .song-info { text-align: center; margin-bottom: 20px; width: 80%; }
+        .song-title { font-size: 18px; font-weight: bold; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .song-artist { font-size: 14px; color: #888; }
 
-        /* 影片列表 */
-        #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 20px; }
-        .card { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; transition: 0.2s; }
-        .card:hover { transform: translateY(-5px); }
-        .card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #eee; }
-        .card h4 { margin: 10px; font-size: 14px; line-height: 1.4; }
+        /* 控制區塊 (進度條 + 音量) */
+        .audio-controls { width: 85%; display: flex; flex-direction: column; gap: 20px; }
+        
+        /* === 通用滑動條樣式 (進度條 & 音量條) === */
+        .slider-container { 
+            width: 100%; height: 24px; display: flex; align-items: center; cursor: pointer; position: relative; 
+            touch-action: none; /* 防止手機上下滑動干擾 */
+        }
+        .slider-track { 
+            width: 100%; height: 4px; background: #444; border-radius: 2px; position: relative; 
+        }
+        .slider-fill { 
+            height: 100%; background: #2196f3; width: 0%; border-radius: 2px; position: absolute; top: 0; left: 0; pointer-events: none; 
+        }
+        /* 圓球 (Thumb) */
+        .slider-thumb {
+            width: 14px; height: 14px; background: #fff; border-radius: 50%;
+            position: absolute; top: 50%; left: 0%; 
+            transform: translate(-50%, -50%); 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
+            z-index: 2;
+            transition: transform 0.1s;
+        }
+        
+        .slider-container:hover .slider-track { height: 6px; border-radius: 3px; }
+        .slider-container:hover .slider-thumb { transform: translate(-50%, -50%) scale(1.3); }
 
-        /* 播放器 */
-        #player { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 999; display: none; justify-content: center; align-items: center; flex-direction: column; }
-        video { width: 90%; max-width: 800px; aspect-ratio: 16/9; background: black; }
-        .close-btn { color: white; background: none; border: 1px solid white; width: auto; padding: 5px 20px; margin-bottom: 10px; }
+        .time-labels { display: flex; justify-content: space-between; font-size: 12px; color: #ccc; font-family: monospace; margin-top: -8px; }
+
+        /* 音量區塊 */
+        .volume-wrapper { display: flex; align-items: center; gap: 12px; width: 100%; }
+        .vol-icon { cursor: pointer; font-size: 18px; width: 24px; text-align: center; }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* 右側清單 */
+        .playlist-sidebar { flex: 1; background: #181818; border-radius: 12px; border: 1px solid #333; display: flex; flex-direction: column; overflow: hidden; min-width: 320px; }
+        .playlist-header { padding: 15px; background: #252526; border-bottom: 1px solid #333; font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+        .playlist-items { flex: 1; overflow-y: auto; }
+        
+        .item { display: flex; gap: 10px; padding: 10px; border-bottom: 1px solid #2a2a2a; cursor: pointer; transition: 0.2s; }
+        .item:hover { background: #333; }
+        .item.active { background: #3a2a2a; border-left: 4px solid #2196f3; }
+        .item img { width: 100px; height: 56px; object-fit: cover; border-radius: 4px; background: #333; }
+        .item-info { display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
+        .item-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .item-index { font-size: 11px; color: #666; margin-right: 5px; min-width: 25px; }
     </style>
 </head>
 <body>
 
-    <div class="panel">
-        <div class="row">
-            <label>1. 選擇伺服器 (API Instance)</label>
-            <select id="api">
-                <option value="https://pipedapi.kavin.rocks">Kavin (官方/較慢)</option>
-                <option value="https://api.piped.projectsegfau.lt">Project Segfault</option>
-                <option value="https://pipedapi.tokhmi.xyz">Tokhmi</option>
-                <option value="https://api-piped.mha.fi">MHA (芬蘭)</option>
-                <option value="https://pipedapi.smnz.de">SMNZ (德國)</option>
+    <div class="main-stage">
+        <div class="box">
+            <h2>🚀 NewPipe V21 (滑動操控版)</h2>
+            
+            <label style="font-size:12px; color:#aaa;">播放模式:</label>
+            <select id="qualitySelect" onchange="toggleMode()">
+                <option value="audio">🎵 純音訊模式 (隱藏畫面)</option>
+                <option value="best">📺 最佳畫質 (720p)</option>
+                <option value="360p">📉 省流影片 (360p)</option>
             </select>
-        </div>
 
-        <div class="row">
-            <label class="proxy-switch">
-                <input type="checkbox" id="useProxy" checked>
-                <span><b>開啟「強力穿透模式」 (解決 CORS 報錯)</b><br><small>如果搜尋失敗，請務必勾選這個選項！</small></span>
-            </label>
-        </div>
+            <input type="text" id="inputUrl" value="https://www.youtube.com/playlist?list=PLMh3iZXeWr1fZIr9ETGlREZgGQ2FbF_vF" placeholder="貼上播放清單 ID">
+            
+            <div class="controls">
+                <button class="btn-start" id="btnStart" onclick="startAutoLoad()">▶ 開始吸取</button>
+                <button class="btn-stop" id="btnStop" onclick="stopLoading()">⏹ 停止</button>
+            </div>
 
-        <div class="row">
-            <input type="text" id="kw" placeholder="輸入關鍵字..." value="周杰倫">
+            <div class="progress-bar" id="pBar"><div class="progress-value"></div></div>
+            <div id="log">準備就緒...</div>
         </div>
+        
+        <div class="media-container">
+            <video id="mainPlayer" controls playsinline></video>
+            
+            <div id="audioOverlay">
+                <img id="albumArt" src="https://via.placeholder.com/150" onclick="togglePlayPause()" title="點擊暫停/播放">
+                
+                <div class="song-info">
+                    <div class="song-title" id="displayTitle">準備播放</div>
+                    <div class="song-artist" id="displayAuthor">...</div>
+                </div>
 
-        <button onclick="startSearch()">搜尋影片</button>
-        <div id="msg">準備就緒...</div>
+                <div class="audio-controls">
+                    <div class="slider-container" id="seekBar">
+                        <div class="slider-track">
+                            <div class="slider-fill" id="seekFill"></div>
+                            <div class="slider-thumb" id="seekThumb"></div>
+                        </div>
+                    </div>
+                    <div class="time-labels">
+                        <span id="currTimeText">0:00</span>
+                        <span id="durTimeText">0:00</span>
+                    </div>
+
+                    <div class="volume-wrapper">
+                        <div class="vol-icon" onclick="toggleMute()" id="volIcon">🔊</div>
+                        <div class="slider-container" id="volBar">
+                            <div class="slider-track">
+                                <div class="slider-fill" id="volFill" style="width: 100%;"></div>
+                                <div class="slider-thumb" id="volThumb" style="left: 100%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div id="list"></div>
-
-    <div id="player">
-        <button class="close-btn" onclick="document.getElementById('player').style.display='none';document.querySelector('video').pause()">✕ 關閉播放</button>
-        <video controls playsinline></video>
+    <div class="playlist-sidebar">
+        <div class="playlist-header">
+            <span>播放清單</span>
+            <span id="pl-count" style="background:#2196f3; padding:2px 6px; border-radius:4px; font-size:12px;">0</span>
+        </div>
+        <div class="playlist-items" id="pl-list"></div>
     </div>
 
     <script>
-        // 這是公開的 CORS Proxy 服務，它會幫我們轉發請求
-        const PROXY_URL = "https://api.allorigins.win/raw?url="; 
-        // 備用: "https://corsproxy.io/?" (如果上面那個掛了可以換這個)
+        const LOCAL_BRIDGE = "https://bridge.zihuanfeng520.workers.dev"; 
+        const CLIENT_CONTEXT = {
+            "context": {
+                "client": {
+                    "clientName": "ANDROID",
+                    "clientVersion": "19.29.35",
+                    "hl": "zh-TW", "gl": "TW",
+                    "androidSdkVersion": 30
+                }
+            }
+        };
 
-        function log(text, isError = false) {
-            const el = document.getElementById('msg');
-            el.textContent = text;
-            el.style.color = isError ? 'red' : 'green';
+        let isRunning = false;
+        let totalLoaded = 0;
+        let uniqueIds = new Set();
+        let currentMeta = { thumb: "", title: "", author: "" }; 
+        let lastVolume = 1.0; 
+        
+        // 拖曳狀態旗標
+        let isDraggingSeek = false;
+        let isDraggingVol = false;
+
+        const logger = {
+            log: (msg) => {
+                const el = document.getElementById('log');
+                el.innerText = `> ${msg}\n` + el.innerText;
+            }
+        };
+
+        const player = document.getElementById('mainPlayer');
+        
+        // === 核心功能：滑鼠拖曳邏輯 ===
+        function setupDraggable(containerId, onDrag, onStop) {
+            const container = document.getElementById(containerId);
+            
+            const handleMove = (e) => {
+                const rect = container.getBoundingClientRect();
+                let percent = (e.clientX - rect.left) / rect.width;
+                if (percent < 0) percent = 0;
+                if (percent > 1) percent = 1;
+                onDrag(percent);
+            };
+
+            const handleUp = (e) => {
+                document.removeEventListener('mousemove', handleMove);
+                document.removeEventListener('mouseup', handleUp);
+                if(onStop) onStop();
+            };
+
+            container.addEventListener('mousedown', (e) => {
+                handleMove(e); // 點擊當下先更新一次
+                document.addEventListener('mousemove', handleMove);
+                document.addEventListener('mouseup', handleUp);
+            });
         }
 
-        async function startSearch() {
-            const kw = document.getElementById('kw').value;
-            const api = document.getElementById('api').value;
-            const useProxy = document.getElementById('useProxy').checked;
-            const list = document.getElementById('list');
+        // 綁定進度條拖曳
+        setupDraggable('seekBar', (percent) => {
+            isDraggingSeek = true; // 鎖住自動更新
+            updateSeekUI(percent * 100);
+            if(player.duration) {
+                // 拖曳時即時預覽時間
+                const previewTime = percent * player.duration;
+                document.getElementById('currTimeText').innerText = formatTime(previewTime);
+                // 可選：即時跳轉 (Scrubbing) -> player.currentTime = previewTime;
+            }
+        }, () => {
+            // 放開滑鼠時才真正跳轉 (避免卡頓)
+            const percent = parseFloat(document.getElementById('seekFill').style.width) / 100;
+            if(player.duration) player.currentTime = percent * player.duration;
+            isDraggingSeek = false; // 解鎖
+        });
 
-            if(!kw) return log("請輸入關鍵字", true);
+        // 綁定音量條拖曳
+        setupDraggable('volBar', (percent) => {
+            isDraggingVol = true;
+            updateVolUI(percent);
+            player.volume = percent;
+            player.muted = false;
+        }, () => {
+            isDraggingVol = false;
+        });
 
-            log("搜尋中...");
-            list.innerHTML = "";
 
-            // 組合網址
-            let targetUrl = `${api}/search?q=${encodeURIComponent(kw)}&filter=videos`;
+        // === 播放器事件 ===
+        player.addEventListener('timeupdate', () => {
+            if (!player.duration || isDraggingSeek) return; // 如果正在拖，就不要被影片更新打斷
             
-            // 如果勾選了代理，就把網址包一層
-            if(useProxy) {
-                // 注意：這裡我們把目標網址當作參數傳給 Proxy
-                targetUrl = PROXY_URL + encodeURIComponent(targetUrl);
+            const percent = (player.currentTime / player.duration) * 100;
+            updateSeekUI(percent);
+            document.getElementById('currTimeText').innerText = formatTime(player.currentTime);
+            document.getElementById('durTimeText').innerText = formatTime(player.duration);
+        });
+
+        player.addEventListener('play', () => {
+            document.getElementById('albumArt').style.animationPlayState = 'running';
+        });
+        player.addEventListener('pause', () => {
+            document.getElementById('albumArt').style.animationPlayState = 'paused';
+        });
+
+        player.addEventListener('volumechange', () => {
+            if(!isDraggingVol) updateVolUI(player.volume);
+            updateVolIcon();
+        });
+
+        // UI 更新 Helper
+        function updateSeekUI(percent) {
+            document.getElementById('seekFill').style.width = percent + '%';
+            document.getElementById('seekThumb').style.left = percent + '%';
+        }
+
+        function updateVolUI(percent) {
+            document.getElementById('volFill').style.width = (percent * 100) + '%';
+            document.getElementById('volThumb').style.left = (percent * 100) + '%';
+        }
+
+        function updateVolIcon() {
+            const volIcon = document.getElementById('volIcon');
+            if(player.muted || player.volume === 0) volIcon.innerText = '🔇';
+            else if(player.volume < 0.3) volIcon.innerText = '🔈';
+            else if(player.volume < 0.7) volIcon.innerText = '🔉';
+            else volIcon.innerText = '🔊';
+        }
+
+        function formatTime(seconds) {
+            if(isNaN(seconds)) return "0:00";
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            return `${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+
+        function togglePlayPause() {
+            if (player.paused) player.play();
+            else player.pause();
+        }
+
+        function toggleMute() {
+            if(player.muted) {
+                player.muted = false;
+                player.volume = lastVolume || 0.5;
+            } else {
+                lastVolume = player.volume;
+                player.muted = true;
+            }
+        }
+
+        function toggleMode() {
+            const mode = document.getElementById('qualitySelect').value;
+            const overlay = document.getElementById('audioOverlay');
+            if (mode === 'audio') {
+                overlay.style.display = 'flex';
+                updateVolUI(player.volume); // 切換回來時同步音量條 UI
+            } else {
+                overlay.style.display = 'none';
+            }
+        }
+
+        // === 自動加載 (保持不變) ===
+        async function startAutoLoad() {
+            const input = document.getElementById('inputUrl').value;
+            let listId = input.includes("list=") ? input.split("list=")[1].split("&")[0] : input;
+            const browseId = listId.startsWith("VL") ? listId : "VL" + listId;
+
+            resetUI();
+            setLoading(true);
+            logger.log(`開始任務: ${browseId}`);
+
+            try {
+                let nextToken = await fetchAndProcess(browseId, null);
+                while (nextToken && isRunning) {
+                    await new Promise(r => setTimeout(r, 200));
+                    nextToken = await fetchAndProcess(null, nextToken);
+                }
+                logger.log("✅ 清單載入完畢");
+            } catch(e) {
+                logger.log(`❌ 錯誤: ${e.message}`);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function stopLoading() {
+            isRunning = false;
+            logger.log("🛑 已停止");
+        }
+
+        async function fetchAndProcess(browseId, continuationToken) {
+            let payload = { ...CLIENT_CONTEXT };
+            if (browseId) payload.browseId = browseId;
+            if (continuationToken) payload.continuation = continuationToken;
+
+            const res = await fetch(LOCAL_BRIDGE + "/browse", { method: "POST", body: JSON.stringify(payload) });
+            const data = await res.json();
+
+            const videos = deepSearch(data, ['playlistVideoRenderer', 'videoRenderer']);
+            if (videos.length > 0) renderVideos(videos);
+
+            return findContinuationToken(data);
+        }
+
+        function findContinuationToken(data) {
+            let commands = deepSearch(data, ['continuationCommand']);
+            if (commands.length > 0) return commands[0].token;
+            let nextData = deepSearch(data, ['nextContinuationData']);
+            if (nextData.length > 0) return nextData[0].continuation;
+            return null;
+        }
+
+        function deepSearch(obj, keysToFind, results = []) {
+            if (!obj || typeof obj !== 'object') return results;
+            for (const key of keysToFind) {
+                if (obj[key]) results.push(obj[key]);
+            }
+            if (Array.isArray(obj)) {
+                for (let item of obj) deepSearch(item, keysToFind, results);
+            } else {
+                for (let k in obj) deepSearch(obj[k], keysToFind, results);
+            }
+            return results;
+        }
+
+        function renderVideos(videoList) {
+            const container = document.getElementById('pl-list');
+            videoList.forEach(v => {
+                if(!v.videoId || uniqueIds.has(v.videoId)) return;
+                uniqueIds.add(v.videoId);
+                totalLoaded++;
+
+                const title = v.title.runs ? v.title.runs[0].text : (v.title.simpleText || "無標題");
+                let thumb = "https://via.placeholder.com/100x56";
+                if (v.thumbnail?.thumbnails?.length) {
+                    thumb = v.thumbnail.thumbnails[v.thumbnail.thumbnails.length - 1].url;
+                }
+                const author = v.shortBylineText?.runs[0]?.text || "";
+
+                const el = document.createElement('div');
+                el.className = 'item';
+                el.onclick = () => {
+                    document.querySelectorAll('.item').forEach(i => i.classList.remove('active'));
+                    el.classList.add('active');
+                    currentMeta = { thumb, title, author };
+                    playVideo(v.videoId);
+                };
+                el.innerHTML = `
+                    <div class="item-index">${totalLoaded}</div>
+                    <img src="${thumb}">
+                    <div class="item-info">
+                        <div class="item-title">${title}</div>
+                        <div style="font-size:11px; color:#888;">${author}</div>
+                    </div>
+                `;
+                container.appendChild(el);
+            });
+            document.getElementById('pl-count').innerText = totalLoaded;
+        }
+
+        async function playVideo(videoId) {
+            const mode = document.getElementById('qualitySelect').value;
+            const overlay = document.getElementById('audioOverlay');
+
+            logger.log(`載入: ${currentMeta.title}`);
+
+            if (mode === 'audio') {
+                overlay.style.display = 'flex';
+                document.getElementById('albumArt').src = currentMeta.thumb;
+                document.getElementById('displayTitle').innerText = currentMeta.title;
+                document.getElementById('displayAuthor').innerText = currentMeta.author;
+                updateVolUI(player.volume); // 同步音量
+            } else {
+                overlay.style.display = 'none';
             }
 
             try {
-                const res = await fetch(targetUrl);
-                if(!res.ok) throw new Error("連線失敗: " + res.status);
-                
-                const data = await res.json();
-                
-                if(!data.items || data.items.length === 0) {
-                    log("找不到影片，請換個關鍵字或伺服器", true);
-                    return;
-                }
-
-                log(`找到 ${data.items.length} 部影片`);
-
-                data.items.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'card';
-                    div.innerHTML = `
-                        <img src="${item.thumbnail}" onerror="this.src='https://via.placeholder.com/300?text=No+Img'">
-                        <h4>${item.title}</h4>
-                    `;
-                    // 點擊卡片時播放
-                    div.onclick = () => playVideo(item.url, api, useProxy);
-                    list.appendChild(div);
+                const res = await fetch(LOCAL_BRIDGE + "/player", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        ...CLIENT_CONTEXT, "videoId": videoId,
+                        "contentCheckOk": true, "racyCheckOk": true
+                    })
                 });
+                const data = await res.json();
+                
+                if (data.playabilityStatus?.status !== "OK") throw new Error("無法播放");
 
+                const formats = [...(data.streamingData?.formats||[])];
+                let bestStream = null;
+
+                if (mode === 'audio' || mode === '360p') {
+                    bestStream = formats.find(f => f.itag === 18) || formats.find(f => f.height === 360);
+                } else {
+                    bestStream = formats.find(f => f.itag === 22) || formats[0];
+                }
+
+                if(bestStream) {
+                    logger.log(`格式: ${bestStream.qualityLabel}`);
+                    player.src = bestStream.url;
+                    player.play();
+                } else {
+                    alert("找不到適合格式");
+                }
             } catch(e) {
-                console.error(e);
-                log("發生錯誤: " + e.message + " (請嘗試勾選/取消強力穿透模式，或換個伺服器)", true);
+                logger.log(`❌ 播放失敗: ${e.message}`);
             }
         }
 
-        async function playVideo(url, api, useProxy) {
-            const id = url.split("v=")[1];
-            if(!id) return;
+        function resetUI() {
+            document.getElementById('pl-list').innerHTML = "";
+            document.getElementById('log').innerText = "準備就緒...";
+            totalLoaded = 0;
+            uniqueIds.clear();
+            isRunning = true;
+        }
 
-            log("正在解析影片地址...");
-            let targetUrl = `${api}/streams/${id}`;
-            
-            if(useProxy) {
-                targetUrl = PROXY_URL + encodeURIComponent(targetUrl);
-            }
-
-            try {
-                const res = await fetch(targetUrl);
-                const data = await res.json();
-                
-                // 找 mp4
-                const stream = data.videoStreams.find(s => s.quality === '1080p' && s.mimeType.includes('mp4') && !s.videoOnly) 
-                            || data.videoStreams.find(s => s.mimeType.includes('mp4') && !s.videoOnly)
-                            || data.videoStreams[0];
-
-                if(stream) {
-                    const v = document.querySelector('video');
-                    const p = document.getElementById('player');
-                    v.src = stream.url; 
-                    p.style.display = 'flex';
-                    v.play();
-                    log("播放中");
-                } else {
-                    alert("無法播放此影片");
-                }
-            } catch(e) {
-                log("播放解析失敗", true);
-            }
+        function setLoading(loading) {
+            document.getElementById('btnStart').style.display = loading ? 'none' : 'block';
+            document.getElementById('btnStop').style.display = loading ? 'block' : 'none';
+            document.getElementById('pBar').style.display = loading ? 'block' : 'none';
         }
     </script>
 </body>
